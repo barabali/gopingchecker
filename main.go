@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -26,12 +25,11 @@ import (
 	// _ "k8s.io/client-go/plugin/pkg/client/auth/openstack"
 )
 
-type Watched struct {
+type Target struct {
 	Service v1.Service
 	Pods    *v1.PodList
+	ready   bool
 }
-
-//type targets []Watched
 
 func main() {
 	// creates the in-cluster config
@@ -58,40 +56,57 @@ func main() {
 
 	serviceNames := strings.SplitN(service_filter, ",", -1)
 
-	currentTargets := make([]Watched, 0)
-
-	currentTargets = refreshTargets(clientset, serviceNames, currentTargets)
-
-	for _, item := range currentTargets {
-		fmt.Println("Found service name: " + item.Service.Name + ", pods: " + item.Pods.Items[0].Name)
-	}
+	currentTargets := make(map[string]Target)
 
 	for {
-		for _, item := range currentTargets {
-			resp, err := http.Get("http://" + item.Pods.Items[0].Status.PodIP + ":8080/ping")
-			if err != nil {
-				panic(err.Error())
+		refreshTargets(clientset, serviceNames, currentTargets)
+
+		for _, service := range currentTargets {
+			fmt.Println("Checking service: " + service.Service.Name + service.Service.Spec.Ports[0].String())
+
+			//for all pods under service, TODO percentage availability...
+			for _, podOfService := range service.Pods.Items {
+
+				//get ping url from pod labels
+				url := podOfService.Annotations["ping"]
+
+				if url == "" {
+					url = "ping"
+				}
+
+				resp, err := http.Get("http://" + podOfService.Status.PodIP + ":" + fmt.Sprint(service.Service.Spec.Ports[0].Port) + "/" + url)
+				if err != nil {
+					panic(err.Error())
+				}
+
+				if resp.StatusCode == http.StatusOK {
+					fmt.Println("Pod "+podOfService.Name+" ping http status: ", resp.StatusCode)
+					service.ready = true
+				} else {
+					fmt.Println("Non-OK HTTP status:", resp.StatusCode)
+					service.ready = false
+				}
+				resp.Body.Close()
 			}
-			defer resp.Body.Close()
-			body, err := io.ReadAll(resp.Body)
+
+			/*body, err := io.ReadAll(resp.Body)
 			if err != nil {
 				panic(err.Error())
 			}
 
-			fmt.Printf("Response: %s \n", body)
+			fmt.Printf("Response: %s \n", body)*/
 		}
 
 		time.Sleep(time.Duration(check_period) * time.Second)
 	}
 }
 
-func refreshTargets(clientset *kubernetes.Clientset, serviceNames []string, receiverTargets []Watched) []Watched {
+func refreshTargets(clientset *kubernetes.Clientset, serviceNames []string, currentTargets map[string]Target) {
 	//get services
 	services_all, err := clientset.CoreV1().Services("").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		panic(err.Error())
 	}
-	fmt.Printf("There are %d services in the cluster\n", len(services_all.Items))
 
 	for _, name := range serviceNames {
 		var found bool = false
@@ -99,7 +114,7 @@ func refreshTargets(clientset *kubernetes.Clientset, serviceNames []string, rece
 			//get service, pods based on service name
 			if strings.HasPrefix(service.Name, name) {
 				found = true
-				var watched Watched
+				var watched Target
 				watched.Service = service
 
 				//get pods for service in default namespace
@@ -108,18 +123,18 @@ func refreshTargets(clientset *kubernetes.Clientset, serviceNames []string, rece
 					panic(err.Error())
 				}
 				watched.Pods = servicepods
-				receiverTargets = append(receiverTargets, watched)
-				fmt.Println("New target added: " + watched.Service.Name)
+
+				currentTargets[service.Name] = watched
+				fmt.Println("Target added/refreshed: " + watched.Service.Name)
 			}
 		}
 
 		if !found {
 			fmt.Println("Service not found for configured service name: " + name)
+			//Removing service in case it existed before
+			delete(currentTargets, name)
 		}
 	}
-
-	return receiverTargets
-
 }
 
 /*func (services *v1.Service) getService(name string) {
@@ -136,8 +151,5 @@ func getPodsForSvc(svc *v1.Service, namespace string, k8sClient *kubernetes.Clie
 	set := labels.Set(svc.Spec.Selector)
 	listOptions := metav1.ListOptions{LabelSelector: set.AsSelector().String()}
 	pods, err := k8sClient.CoreV1().Pods(namespace).List(context.TODO(), listOptions)
-	/*for _, pod := range pods.Items {
-		fmt.Fprintf(os.Stdout, "pod name: %v\n", pod.Name)
-	}*/
 	return pods, err
 }
