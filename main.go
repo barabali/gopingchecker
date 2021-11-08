@@ -7,8 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
-
+	//"time"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -25,10 +24,46 @@ import (
 	// _ "k8s.io/client-go/plugin/pkg/client/auth/openstack"
 )
 
-type Target struct {
-	Service v1.Service
-	Pods    *v1.PodList
-	ready   bool
+var (
+	currentTargets = make(map[string]Target)
+	readiness = make(chan TargetReady)
+)
+
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "# HELP services statuses\n")
+	for _, service := range currentTargets {
+		//fmt.Fprint(w, "status{serviceName="+service.Service.Name+"} "+strconv.FormatBool(service.ready)+"\n")
+		if service.ready {
+			fmt.Fprint(w, "status{serviceName="+service.Service.Name+"} "+"1\n")
+		} else {
+			fmt.Fprint(w, "status{serviceName="+service.Service.Name+"} "+"0\n")
+		}
+	}
+}
+
+func reader() {
+	for{
+		s := <-readiness 
+		fmt.Println("Teszt channel read:" + s.name + ", "+ strconv.FormatBool(s.ready))
+	}
+}
+
+func startHTTPServer() {
+	//create http server for displaying metrics
+	http.HandleFunc("/metrics", handler)
+	go reader()
+	http.ListenAndServe(":8082", nil)
+}
+
+func checkTargets(clientset *kubernetes.Clientset, serviceNames []string, check_period int) {
+	//currentTargets := make(map[string]Target)
+
+	refreshTargets(clientset, serviceNames, currentTargets)
+	for _, target := range currentTargets {
+		fmt.Println("Starting target Run: "+ target.Service.Name)
+		go target.Run(clientset, check_period)
+	}
 }
 
 func main() {
@@ -51,61 +86,20 @@ func main() {
 	if err != nil {
 		check_period = 5
 		fmt.Println("ERROR converting string to int for check period!")
-		//panic(err.Error())
 	}
 
 	serviceNames := strings.SplitN(service_filter, ",", -1)
 
-	currentTargets := make(map[string]Target)
+	checkTargets(clientset, serviceNames, check_period)
 
-	for {
-		refreshTargets(clientset, serviceNames, currentTargets)
-
-		for _, service := range currentTargets {
-			fmt.Println("Checking service: " + service.Service.Name + service.Service.Spec.Ports[0].String())
-
-			//for all pods under service, TODO percentage availability...
-			for _, podOfService := range service.Pods.Items {
-
-				//get ping url from pod labels
-				url := podOfService.Annotations["ping"]
-
-				if url == "" {
-					url = "ping"
-				}
-
-				resp, err := http.Get("http://" + podOfService.Status.PodIP + ":" + fmt.Sprint(service.Service.Spec.Ports[0].Port) + "/" + url)
-				if err != nil {
-					panic(err.Error())
-				}
-
-				if resp.StatusCode == http.StatusOK {
-					fmt.Println("Pod "+podOfService.Name+" ping http status: ", resp.StatusCode)
-					service.ready = true
-				} else {
-					fmt.Println("Non-OK HTTP status:", resp.StatusCode)
-					service.ready = false
-				}
-				resp.Body.Close()
-			}
-
-			/*body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				panic(err.Error())
-			}
-
-			fmt.Printf("Response: %s \n", body)*/
-		}
-
-		time.Sleep(time.Duration(check_period) * time.Second)
-	}
+	startHTTPServer()
 }
 
 func refreshTargets(clientset *kubernetes.Clientset, serviceNames []string, currentTargets map[string]Target) {
 	//get services
 	services_all, err := clientset.CoreV1().Services("").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
-		panic(err.Error())
+		fmt.Println(err.Error())
 	}
 
 	for _, name := range serviceNames {
@@ -120,7 +114,7 @@ func refreshTargets(clientset *kubernetes.Clientset, serviceNames []string, curr
 				//get pods for service in default namespace
 				servicepods, err := getPodsForSvc(&service, "default", clientset)
 				if err != nil {
-					panic(err.Error())
+					fmt.Println(err.Error())
 				}
 				watched.Pods = servicepods
 
