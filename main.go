@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -29,35 +28,7 @@ var (
 	readiness = make(chan TargetReady)
 )
 
-
-func handler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "# HELP services statuses\n")
-	for _, service := range currentTargets {
-		//fmt.Fprint(w, "status{serviceName="+service.Service.Name+"} "+strconv.FormatBool(service.ready)+"\n")
-		if service.ready {
-			fmt.Fprint(w, "status{serviceName="+service.Service.Name+"} "+"1\n")
-		} else {
-			fmt.Fprint(w, "status{serviceName="+service.Service.Name+"} "+"0\n")
-		}
-	}
-}
-
-func reader() {
-	for{
-		s := <-readiness 
-		fmt.Println("Teszt channel read:" + s.name + ", "+ strconv.FormatBool(s.ready))
-	}
-}
-
-func startHTTPServer() {
-	//create http server for displaying metrics
-	http.HandleFunc("/metrics", handler)
-	go reader()
-	http.ListenAndServe(":8082", nil)
-}
-
-func checkTargets(clientset *kubernetes.Clientset, serviceNames []string, check_period int) {
-	//currentTargets := make(map[string]Target)
+func createTargets(clientset *kubernetes.Clientset, serviceNames []string, check_period int) {
 
 	refreshTargets(clientset, serviceNames, currentTargets)
 	for _, target := range currentTargets {
@@ -90,7 +61,7 @@ func main() {
 
 	serviceNames := strings.SplitN(service_filter, ",", -1)
 
-	checkTargets(clientset, serviceNames, check_period)
+	createTargets(clientset, serviceNames, check_period)
 
 	startHTTPServer()
 }
