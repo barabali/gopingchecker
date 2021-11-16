@@ -6,21 +6,12 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	//"time"
+	"time"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	//
-	// Uncomment to load all auth plugins
-	// _ "k8s.io/client-go/plugin/pkg/client/auth"
-	//
-	// Or uncomment to load specific auth plugins
-	// _ "k8s.io/client-go/plugin/pkg/client/auth/azure"
-	// _ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	// _ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
-	// _ "k8s.io/client-go/plugin/pkg/client/auth/openstack"
 )
 
 var (
@@ -63,7 +54,12 @@ func main() {
 
 	createTargets(clientset, serviceNames, check_period)
 
-	startHTTPServer()
+	go startHTTPServer()
+
+	for {
+		refreshTargets(clientset, serviceNames, currentTargets)
+		time.Sleep(time.Duration(check_period) * time.Second)
+	}
 }
 
 func refreshTargets(clientset *kubernetes.Clientset, serviceNames []string, currentTargets map[string]Target) {

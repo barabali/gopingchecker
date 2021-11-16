@@ -3,11 +3,6 @@ package main
 import (
 	"fmt"
 	"net/http"
-	"strconv"
-)
-
-var (
-	statusMap = make(map[string]bool)
 )
 
 func handler(w http.ResponseWriter, r *http.Request) {
@@ -19,14 +14,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		} else {
 			fmt.Fprint(w, "status{serviceName="+key+"} "+"0\n")
 		}
-	}
-}
-
-func reader() {
-	for{
-		s := <-readiness 
-		fmt.Println("Teszt channel read:" + s.name + ", "+ strconv.FormatBool(s.ready))
-		statusMap[s.name]=s.ready
 	}
 }
 
