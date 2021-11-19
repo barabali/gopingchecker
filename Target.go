@@ -5,33 +5,18 @@ import (
 	"net/http"
 	"time"
 	"log"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 )
 
-type Target struct {
-	Service v1.Service
-	Pods    *v1.PodList
-	ready   bool
-}
-
-type TargetReady struct {
-	name string
-	ready bool
-}
-
-//var currentTarget Target
-
-func (currentTarget Target) Run(clientset *kubernetes.Clientset,check_period int) {
-	//currentTargets := make(map[string]Target)
+func (currentTarget Target) Run(clientset *kubernetes.Clientset,check_period int,timeout int) {
 	fmt.Println("In Run for service: " + currentTarget.Service.Name)
 
 	var currentReadiness TargetReady
-	currentReadiness.name = currentTarget.Service.Name
-	currentReadiness.ready = false
+	currentReadiness.Name = currentTarget.Service.Name
+	currentReadiness.Ready = false
 	
 	var netclient = &http.Client{
-		Timeout: 5 * time.Second,
+		Timeout: time.Duration(timeout) * time.Second,
 	}
 
 	for {
@@ -52,21 +37,21 @@ func (currentTarget Target) Run(clientset *kubernetes.Clientset,check_period int
 				if err == nil {
 					if resp.StatusCode == http.StatusOK {
 						fmt.Println("Pod "+podOfService.Name+" ping http status: ", resp.StatusCode)
-						currentTarget.ready = true
+						currentTarget.Ready = true
 					} else {
 						fmt.Println("Non-OK HTTP status:", resp.StatusCode)
-						currentTarget.ready = false
+						currentTarget.Ready = false
 					}
 					resp.Body.Close()
 				} else {
 					log.Output(1,err.Error())
 					fmt.Println("HTTP request error")
-					currentTarget.ready = false
+					currentTarget.Ready = false
 				}
 
 				//changed currentReadiness
-				if currentReadiness.ready != currentTarget.ready {
-					currentReadiness.ready = currentTarget.ready
+				if currentReadiness.Ready != currentTarget.Ready {
+					currentReadiness.Ready = currentTarget.Ready
 					readiness <- currentReadiness
 				}
 

@@ -17,9 +17,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func startHTTPServer() {
+func startMetricsServer() {
 	//create http server for displaying metrics
 	http.HandleFunc("/metrics", handler)
-	go reader()
 	http.ListenAndServe(":8082", nil)
 }

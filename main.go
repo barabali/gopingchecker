@@ -14,17 +14,12 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-var (
-	currentTargets = make(map[string]Target)
-	readiness = make(chan TargetReady)
-)
-
-func createTargets(clientset *kubernetes.Clientset, serviceNames []string, check_period int) {
+func createTargets(clientset *kubernetes.Clientset, serviceNames []string, check_period int, timeout int) {
 
 	refreshTargets(clientset, serviceNames, currentTargets)
 	for _, target := range currentTargets {
 		fmt.Println("Starting target Run: "+ target.Service.Name)
-		go target.Run(clientset, check_period)
+		go target.Run(clientset, check_period,timeout)
 	}
 }
 
@@ -43,6 +38,7 @@ func main() {
 	//get config
 	service_filter := os.Getenv("SERVICE_FILTER")
 	check_period_string := os.Getenv("CHECK_PERIOD")
+	timeout_string := os.Getenv("TIMEOUT")
 
 	check_period, err := strconv.Atoi(check_period_string)
 	if err != nil {
@@ -50,11 +46,19 @@ func main() {
 		fmt.Println("ERROR converting string to int for check period!")
 	}
 
+	timeout, err := strconv.Atoi(timeout_string)
+	if err != nil {
+		timeout = 5
+		fmt.Println("ERROR converting string to int for timeout!")
+	}
+
 	serviceNames := strings.SplitN(service_filter, ",", -1)
 
-	createTargets(clientset, serviceNames, check_period)
-
-	go startHTTPServer()
+	createTargets(clientset, serviceNames, check_period, timeout)
+	
+	go reader()
+	go startMetricsServer()
+	go startRESTServer()
 
 	for {
 		refreshTargets(clientset, serviceNames, currentTargets)
