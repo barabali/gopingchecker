@@ -39,11 +39,16 @@ func (currentTarget Target) Run(clientset *kubernetes.Clientset,check_period int
 		//for all pods under service, TODO percentage availability...
 
 		//get ping url from service annotations
-		url := currentTarget.Service.Annotations["ping"]
+		url := currentTarget.Service.Annotations["pingurl"]
+		port := currentTarget.Service.Annotations["pingport"]
 		if url == "" {
 			url = "ping"
 		}
-		resp, err := netclient.Get("http://" + currentTarget.Service.Spec.ClusterIP + ":" + fmt.Sprint(currentTarget.Service.Spec.Ports[0].Port) + "/" + url)
+		if port == "" {
+			fmt.Println("No port annotation on service: "+currentTarget.Service.Name)
+			port = "80"
+		}
+		resp, err := netclient.Get("http://" + currentTarget.Service.Spec.ClusterIP + ":" + fmt.Sprint(port) + "/" + url)
 		if err == nil {
 			if resp.StatusCode == http.StatusOK {
 				//fmt.Println("Pod "+podOfService.Name+" ping http status: ", resp.StatusCode)
@@ -92,7 +97,7 @@ func (currentTarget Target) Run(clientset *kubernetes.Clientset,check_period int
 				readiness <- currentReadiness
 			}
 		}*/
-		
+
 		time.Sleep(time.Duration(check_period) * time.Second)
 	}
 }
