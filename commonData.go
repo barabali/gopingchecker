@@ -22,12 +22,16 @@ type TargetReady struct {
 	Ready bool `json:"status"`
 }
 
+type targets map[string]Target
+
 var (
 	statusMap = make(map[string]bool)
-	currentTargets = make(map[string]Target)
+	currentTargets = make(targets)
 	readiness = make(chan TargetReady)
 	messages = make(chan string,5)
 )
+
+//type targetnames []Target
 
 func reader() {
 	for{
@@ -37,7 +41,7 @@ func reader() {
 	}
 }
 
-func refreshTargets(clientset *kubernetes.Clientset, serviceNames []string, currentTargets map[string]Target,check_period int, timeout int) {
+func refreshTargets(clientset *kubernetes.Clientset, configServiceNames []string, currentTargets map[string]Target,check_period int, timeout int) {
 
 	//get services
 	k8s_Services, err := clientset.CoreV1().Services("").List(context.TODO(), metav1.ListOptions{})
@@ -46,7 +50,7 @@ func refreshTargets(clientset *kubernetes.Clientset, serviceNames []string, curr
 	}
 
 	//Comparing k8s, map and config
-	for _, name := range serviceNames {
+	for _, name := range configServiceNames {
 		var found_k8s bool = false
 		for _, service := range k8s_Services.Items {
 			if service.Name == name {
@@ -60,23 +64,43 @@ func refreshTargets(clientset *kubernetes.Clientset, serviceNames []string, curr
 				}
 
 				//TODO refresh pods, service details 
+
 			}
 		}
 
 		//In config but not in k8s
 		if !found_k8s {
 			fmt.Println("Service not found in k8s: " + name)
+
 			//Removing service from map in case it existed before
 			if target, ok := currentTargets[name]; ok {
 				target.Channel <- "Stop"
 				delete(currentTargets, name)
 			}
 		}
-
-		//TODO removed from config, should remove from map too
-		//delete(currentTargets, name)
-		//delete(statusMap,name)
 	}
+
+	//removed from config, should remove from map too
+	deleteServicesInMapButNotInConfig(configServiceNames)
+
+}
+
+func deleteServicesInMapButNotInConfig(configServiceNames []string){
+	for name,_ := range currentTargets {
+		if !stringInSlice(name,configServiceNames) {
+			delete(currentTargets, name)
+			delete(statusMap,name)
+		}
+	}
+}
+
+func stringInSlice(a string, list []string) bool {
+    for _, b := range list {
+        if b == a {
+            return true
+        }
+    }
+    return false
 }
 
 func createSingleTarget(clientset *kubernetes.Clientset, service v1.Service) Target{
