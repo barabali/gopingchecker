@@ -9,7 +9,7 @@ import (
 )
 
 func (currentTarget Target) Run(clientset *kubernetes.Clientset,check_period int,timeout int, channel chan string) {
-	fmt.Println("In Run for service: " + currentTarget.Service.Name)
+	fmt.Println("Started Run for service: " + currentTarget.Service.Name)
 
 	var currentReadiness TargetReady
 	currentReadiness.Name = currentTarget.Service.Name
@@ -20,19 +20,8 @@ func (currentTarget Target) Run(clientset *kubernetes.Clientset,check_period int
 	}
 
 	for {
-		select {
-		case x, ok := <- currentTarget.Channel:
-			if ok {
-				fmt.Println(x+", read in "+currentTarget.Service.Name+", stopping goroutine.")
-				currentReadiness.Ready = false
-				readiness <- currentReadiness
-				return
-			} else {
-				fmt.Println("Channel closed!")
-			}
-		default:
-			fmt.Println("Channel empty.")
-			//Nothing on channel
+		if (currentTarget.checkChannelStop(currentReadiness)){
+			return
 		}
 
 		//fmt.Println("Checking service: " + currentTarget.Service.Name + currentTarget.Service.Spec.Ports[0].String())
@@ -42,12 +31,14 @@ func (currentTarget Target) Run(clientset *kubernetes.Clientset,check_period int
 		url := currentTarget.Service.Annotations["pingurl"]
 		port := currentTarget.Service.Annotations["pingport"]
 		if url == "" {
+			fmt.Println("No pingurl annotation on service: "+currentTarget.Service.Name+", using default: /ping")
 			url = "ping"
 		}
 		if port == "" {
-			fmt.Println("No port annotation on service: "+currentTarget.Service.Name)
+			fmt.Println("No pingport annotation on service: "+currentTarget.Service.Name)
 			port = "80"
 		}
+
 		resp, err := netclient.Get("http://" + currentTarget.Service.Spec.ClusterIP + ":" + fmt.Sprint(port) + "/" + url)
 		if err == nil {
 			if resp.StatusCode == http.StatusOK {
@@ -63,6 +54,7 @@ func (currentTarget Target) Run(clientset *kubernetes.Clientset,check_period int
 			fmt.Println("HTTP request error")
 			currentTarget.Ready = false
 		}
+
 		//changed currentReadiness
 		if currentReadiness.Ready != currentTarget.Ready {
 			currentReadiness.Ready = currentTarget.Ready
@@ -100,4 +92,22 @@ func (currentTarget Target) Run(clientset *kubernetes.Clientset,check_period int
 
 		time.Sleep(time.Duration(check_period) * time.Second)
 	}
+}
+
+func (currentTarget Target) checkChannelStop(currentReadiness TargetReady) bool {
+	select {
+		case x, ok := <- currentTarget.Channel:
+			if ok {
+				fmt.Println(x+", read in "+currentTarget.Service.Name+", stopping goroutine.")
+				currentReadiness.Ready = false
+				readiness <- currentReadiness
+				return true
+			} else {
+				fmt.Println("Channel closed!")
+			}
+		default:
+			fmt.Println("Channel empty.")
+			//Nothing on channel
+	}
+	return false
 }

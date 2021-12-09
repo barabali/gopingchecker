@@ -1,4 +1,4 @@
-service_filter: "docker-go-ping,prometheus,docker-go-forever,not-existing-service"
+service_filter: "prometheus,not-existing-service"
 check_period: 5
 timeout: 5
 config_refresh: 10

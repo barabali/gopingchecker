@@ -18,6 +18,7 @@ type ServiceDTO struct {
 
 type TargetDTO struct {
 	Service ServiceDTO `json:"service"`
+	ServiceAnnotations map[string]string `json:"serviceAnnotations"`
 	Pods    []string `json:"pods"`
 	Ready   bool `json:"pingStatus"`
 }
@@ -46,6 +47,7 @@ func returnAllTargets(w http.ResponseWriter, r *http.Request){
 
 		var dto TargetDTO 
 		dto.Service = sdto
+		dto.ServiceAnnotations = target.Service.Annotations
 		dto.Ready = statusMap[target.Service.Name]
 
 		for _, podOfService := range target.Pods.Items {
@@ -62,7 +64,7 @@ func returnAllTargets(w http.ResponseWriter, r *http.Request){
 
 func startRESTServer() {
 	//create http server for displaying metrics
-	http.HandleFunc("/", homePage)
+	//http.HandleFunc("/", homePage)
 	http.HandleFunc("/getStatuses", returnAllTargetStatuses)
 	http.HandleFunc("/getAll", returnAllTargets)
 	http.ListenAndServe(":8083", nil)

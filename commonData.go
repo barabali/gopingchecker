@@ -11,9 +11,9 @@ import (
 )
 
 type Target struct {
-	Service v1.Service `json:"service"`
-	Pods    *v1.PodList `json:"pods"`
-	Ready   bool `json:"pingStatus"`
+	Service v1.Service 
+	Pods    *v1.PodList
+	Ready   bool
 	Channel chan string
 }
 
@@ -58,7 +58,7 @@ func refreshTargets(clientset *kubernetes.Clientset, configServiceNames []string
 
 				//Create new if not in map
 				if _, ok := currentTargets[name]; !ok {
-					fmt.Println("This is where new creation will be")
+					fmt.Println("Creating new target")
 					var newTarget Target = createSingleTarget(clientset,service)
 					go newTarget.Run(clientset, check_period,timeout,newTarget.Channel)
 				}
@@ -88,8 +88,11 @@ func refreshTargets(clientset *kubernetes.Clientset, configServiceNames []string
 func deleteServicesInMapButNotInConfig(configServiceNames []string){
 	for name,_ := range currentTargets {
 		if !stringInSlice(name,configServiceNames) {
-			delete(currentTargets, name)
-			delete(statusMap,name)
+			if target, ok := currentTargets[name]; ok {
+				target.Channel <- "Stop"
+				delete(currentTargets, name)
+				delete(statusMap,name)
+			}
 		}
 	}
 }
