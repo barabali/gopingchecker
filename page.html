@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+    <link type="text/css" href="page.css">
+    <style>
+      .col{
+        padding: 5px
+      }
+      .table{
+        margin: 5px
+      }
+      .table-curved {
+          border-collapse: separate;
+      }
+      .table-curved {
+          border: solid #ccc 2px;
+          border-radius: 6px;
+          /* border-left:0px; */
+      }
+      .table-curved td, .table-curved th {
+          border-left: 1px solid #ccc;
+          border-top: 1px solid #ccc;
+      }
+      .table-curved th {
+          border-top: none;
+      }
+      .table-curved th:first-child {
+          border-radius: 6px 0 0 0;
+      }
+      .table-curved th:last-child {
+          border-radius: 0 6px 0 0;
+      }
+      .table-curved th:only-child{
+          border-radius: 6px 6px 0 0;
+      }
+      .table-curved tr:last-child td:first-child {
+          border-radius: 0 0 0 6px;
+      }
+      .table-curved tr:last-child td:last-child {
+          border-radius: 0 0 6px 0;
+      }
+    </style>
+    <title>Ping statuses</title>
+  </head>
+  <body>
+    <h1>Application ping statuses</h1>
+
+      <!--<table id="pingtable" class="table">
+        <thead>
+        <tr>
+          <th scope="col">Name</th>
+          <th scope="col">Status</th>
+        </tr>
+        </thead>
+        <tbody id="pingtablebody">
+          </tr>
+        </tbody>
+      </table>-->
+
+      <div class="container" style="padding: 30px">
+        <div id="pinggrid" class="row row-cols-3" >
+        </div>
+    </div>
+
+    <script>
+        pingGrid = document.querySelector("#pinggrid")
+    
+        fetch("/getAll")
+          .then(response => response.json())
+          .then(servicelist => {
+            //Once we fetch the list, we iterate over it
+            servicelist.forEach(service => {
+              // Create the table row
+              gridcube = document.createElement("div")
+              gridcube.classList.add('col')
+
+              sdiv = document.createElement("div")
+              sdiv.classList.add('panel')
+              sdiv.classList.add('panel-default')
+
+              stable = document.createElement("table")
+              stable.classList.add('table')
+              stable.classList.add('table-curved')
+
+              row1 = document.createElement("tr")
+              sname1 = document.createElement("td")
+              sname1.innerHTML = 'Service name'
+              sname2 = document.createElement("td")
+              sname2.innerHTML = service.service.serviceName
+              row1.appendChild(sname1)
+              row1.appendChild(sname2)
+
+              row2 = document.createElement("tr")
+              sstatus1 = document.createElement("td")
+              sstatus1.innerHTML = 'Service available'
+              sstatus2 = document.createElement("td")
+              sstatus2.innerHTML = service.pingStatus
+              row2.appendChild(sstatus1)
+              row2.appendChild(sstatus2)
+
+              row3 = document.createElement("tr")
+              sannot1 = document.createElement("td")
+              sannot1.innerHTML = 'Service annotations'
+              sannot2 = document.createElement("td")
+
+              let annot = service.serviceAnnotations['pingport']+"/"+service.serviceAnnotations['pingurl']
+              sannot2.innerHTML = annot
+              row3.appendChild(sannot1)
+              row3.appendChild(sannot2)
+
+              stable.appendChild(row1)
+              stable.appendChild(row2)
+              stable.appendChild(row3)
+              sdiv.appendChild(stable)
+              gridcube.appendChild(sdiv)
+
+              if (new String(service.pingStatus).valueOf() == "true".trim()){
+                sstatus2.style.backgroundColor = "lightgreen";
+              }else{
+                sstatus2.style.backgroundColor = "red";
+              }
+
+              pingGrid.appendChild(gridcube)
+            })
+          })
+      </script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p" crossorigin="anonymous"></script>
+  </body>
+</html>

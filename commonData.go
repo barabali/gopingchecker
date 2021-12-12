@@ -14,6 +14,7 @@ type Target struct {
 	Service v1.Service 
 	Pods    *v1.PodList
 	Ready   bool
+	Podpercent float64
 	Channel chan string
 }
 
@@ -22,12 +23,19 @@ type TargetReady struct {
 	Ready bool `json:"status"`
 }
 
+type PodPercent struct {
+	Name string `json:"serviceName"`
+	Podpercent float64 `json:"podpercent"`
+}
+
 type targets map[string]Target
 
 var (
 	statusMap = make(map[string]bool)
+	podpercents = make(map[string]float64)
 	currentTargets = make(targets)
 	readiness = make(chan TargetReady)
+	podpercentchannel = make(chan PodPercent)
 	messages = make(chan string,5)
 )
 
@@ -36,12 +44,20 @@ var (
 func reader() {
 	for{
 		s := <-readiness 
-		fmt.Println("Teszt channel read:" + s.Name + ", "+ strconv.FormatBool(s.Ready))
+		fmt.Println("Status channel read:" + s.Name + ", "+ strconv.FormatBool(s.Ready))
 		statusMap[s.Name]=s.Ready
 	}
 }
 
-func refreshTargets(clientset *kubernetes.Clientset, configServiceNames []string, currentTargets map[string]Target,check_period int, timeout int) {
+func podpercentchannelreader() {
+	for{
+		s := <-podpercentchannel 
+		fmt.Println("Pod percent channel read:" + s.Name + ", "+ fmt.Sprint(s.Podpercent))
+		podpercents[s.Name]=s.Podpercent
+	}
+}
+
+func refreshTargets(clientset *kubernetes.Clientset, configServiceNames []string, currentTargets map[string]Target,check_period int, timeout int,podpercentage int) {
 
 	//get services
 	k8s_Services, err := clientset.CoreV1().Services("").List(context.TODO(), metav1.ListOptions{})
@@ -60,7 +76,7 @@ func refreshTargets(clientset *kubernetes.Clientset, configServiceNames []string
 				if _, ok := currentTargets[name]; !ok {
 					fmt.Println("Creating new target")
 					var newTarget Target = createSingleTarget(clientset,service)
-					go newTarget.Run(clientset, check_period,timeout,newTarget.Channel)
+					go newTarget.Run(clientset, check_period,timeout,podpercentage,newTarget.Channel)
 				}
 
 				//TODO refresh pods, service details 

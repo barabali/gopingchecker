@@ -20,6 +20,7 @@ type TargetDTO struct {
 	Service ServiceDTO `json:"service"`
 	ServiceAnnotations map[string]string `json:"serviceAnnotations"`
 	Pods    []string `json:"pods"`
+	Podpercent string `json:"podpercent"`
 	Ready   bool `json:"pingStatus"`
 }
 
@@ -50,6 +51,7 @@ func returnAllTargets(w http.ResponseWriter, r *http.Request){
 		dto.ServiceAnnotations = target.Service.Annotations
 		dto.Ready = statusMap[target.Service.Name]
 
+		dto.Podpercent = fmt.Sprint(podpercents[target.Service.Name])
 		for _, podOfService := range target.Pods.Items {
 			dto.Pods = append(dto.Pods,podOfService.Name)
 		}
@@ -63,7 +65,7 @@ func returnAllTargets(w http.ResponseWriter, r *http.Request){
 }
 
 func startRESTServer() {
-	//create http server for displaying metrics
+	//create http server for REST
 	//http.HandleFunc("/", homePage)
 	http.HandleFunc("/getStatuses", returnAllTargetStatuses)
 	http.HandleFunc("/getAll", returnAllTargets)

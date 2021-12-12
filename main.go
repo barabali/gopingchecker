@@ -16,6 +16,7 @@ type ConfigFile struct {
         Check_period int `yaml:"check_period"`
 		Timeout int `yaml:"timeout"`
 		Config_refresh int `yaml:"config_refresh"`
+		Pod_percentage int `yaml:"podpercentage"`
 }
 
 type ConfigEnv struct {
@@ -47,25 +48,27 @@ func main() {
 	//createTargetGoroutines(clientset, serviceNames, cfg.Check_period, cfg.Timeout)
 	
 	go reader()
+	go podpercentchannelreader()
 	go startMetricsServer()
 	go startRESTServer()
+	go startWebPage()
 
 	for {
 		//get new config file
 		readConfigFile(&cfg)
 		serviceNames := strings.SplitN(cfg.Service_filter, ",", -1)
-		refreshTargets(clientset, serviceNames, currentTargets,cfg.Check_period, cfg.Timeout)
+		refreshTargets(clientset, serviceNames, currentTargets,cfg.Check_period, cfg.Timeout,cfg.Pod_percentage)
 		time.Sleep(time.Duration(cfg.Config_refresh) * time.Second)
 	}
 }
 
-func createTargetGoroutines(clientset *kubernetes.Clientset, serviceNames []string, check_period int, timeout int) {
+/*func createTargetGoroutines(clientset *kubernetes.Clientset, serviceNames []string, check_period int, timeout int) {
 	createStartTargets(clientset, serviceNames, currentTargets)
 	for _, target := range currentTargets {
 		fmt.Println("Starting target Run: "+ target.Service.Name)
-		go target.Run(clientset, check_period,timeout,target.Channel)
+		go target.Run(clientset, check_period,timeout,pod_percentage,target.Channel)
 	}
-}
+}*/
 
 func readConfigFile(cfg *ConfigFile) {
 	f, err := os.Open("config.yml")

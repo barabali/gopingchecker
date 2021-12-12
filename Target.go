@@ -8,13 +8,17 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func (currentTarget Target) Run(clientset *kubernetes.Clientset,check_period int,timeout int, channel chan string) {
+func (currentTarget Target) Run(clientset *kubernetes.Clientset,check_period int,timeout int,podpercentage int, channel chan string) {
 	fmt.Println("Started Run for service: " + currentTarget.Service.Name)
 
 	var currentReadiness TargetReady
 	currentReadiness.Name = currentTarget.Service.Name
 	currentReadiness.Ready = false
-	
+
+	var podpercent PodPercent
+	podpercent.Name = currentTarget.Service.Name
+	podpercent.Podpercent = 0
+
 	var netclient = &http.Client{
 		Timeout: time.Duration(timeout) * time.Second,
 	}
@@ -62,33 +66,33 @@ func (currentTarget Target) Run(clientset *kubernetes.Clientset,check_period int
 		}
 
 		//Activate only if percentage is required
-		/*for _, podOfService := range currentTarget.Pods.Items {
-			//get ping url from pod labels
-			url := podOfService.Annotations["ping"]
-			if url == "" {
-				url = "ping"
-			}
-			resp, err := netclient.Get("http://" + podOfService.Status.PodIP + ":" + fmt.Sprint(currentTarget.Service.Spec.Ports[0].Port) + "/" + url)
-			if err == nil {
-				if resp.StatusCode == http.StatusOK {
-					//fmt.Println("Pod "+podOfService.Name+" ping http status: ", resp.StatusCode)
-					currentTarget.Ready = true
+		if podpercentage > 0 {
+			numOfPods := len(currentTarget.Pods.Items)
+			currentAvailablePods := 0.0
+
+			for _, podOfService := range currentTarget.Pods.Items {
+				//get ping url from pod labels
+
+				resp, err := netclient.Get("http://" + podOfService.Status.PodIP + ":" + fmt.Sprint(port) + "/" + url)
+				if err == nil {
+					if resp.StatusCode == http.StatusOK {
+						//fmt.Println("Pod "+podOfService.Name+" ping http status: ", resp.StatusCode)
+						currentAvailablePods++
+					} else {
+						fmt.Println("Non-OK HTTP status:", resp.StatusCode)
+					}
+					resp.Body.Close()
 				} else {
-					fmt.Println("Non-OK HTTP status:", resp.StatusCode)
-					currentTarget.Ready = false
+					log.Output(1,err.Error())
+					fmt.Println("HTTP request error")
 				}
-				resp.Body.Close()
-			} else {
-				log.Output(1,err.Error())
-				fmt.Println("HTTP request error")
-				currentTarget.Ready = false
 			}
-			//changed currentReadiness
-			if currentReadiness.Ready != currentTarget.Ready {
-				currentReadiness.Ready = currentTarget.Ready
-				readiness <- currentReadiness
-			}
-		}*/
+
+			//Get percentage
+			currentAvailability := currentAvailablePods / float64(numOfPods)
+			podpercent.Podpercent = currentAvailability*100
+			podpercentchannel <- podpercent
+		}
 
 		time.Sleep(time.Duration(check_period) * time.Second)
 	}
