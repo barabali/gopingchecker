@@ -2,4 +2,4 @@ service_filter: "docker-go-ping,prometheus,docker-go-forever,not-existing-servic
 check_period: 5
 timeout: 5
 config_refresh: 10
-podpercentage: 60
+podpercentage: 50

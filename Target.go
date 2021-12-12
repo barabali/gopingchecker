@@ -8,7 +8,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func (currentTarget Target) Run(clientset *kubernetes.Clientset,check_period int,timeout int,podpercentage int, channel chan string) {
+func (currentTarget Target) Run(clientset *kubernetes.Clientset,check_period int,timeout int,minpodpercentage int, channel chan string) {
 	fmt.Println("Started Run for service: " + currentTarget.Service.Name)
 
 	var currentReadiness TargetReady
@@ -59,14 +59,8 @@ func (currentTarget Target) Run(clientset *kubernetes.Clientset,check_period int
 			currentTarget.Ready = false
 		}
 
-		//changed currentReadiness
-		if currentReadiness.Ready != currentTarget.Ready {
-			currentReadiness.Ready = currentTarget.Ready
-			readiness <- currentReadiness
-		}
-
 		//Activate only if percentage is required
-		if podpercentage > 0 {
+		if minpodpercentage > 0 {
 			numOfPods := len(currentTarget.Pods.Items)
 			currentAvailablePods := 0.0
 
@@ -92,6 +86,17 @@ func (currentTarget Target) Run(clientset *kubernetes.Clientset,check_period int
 			currentAvailability := currentAvailablePods / float64(numOfPods)
 			podpercent.Podpercent = currentAvailability*100
 			podpercentchannel <- podpercent
+
+			//Check requirement
+			if podpercent.Podpercent < float64(minpodpercentage) {
+				currentTarget.Ready = false
+			}
+		}
+
+		//changed currentReadiness	
+		if currentReadiness.Ready != currentTarget.Ready {
+			currentReadiness.Ready = currentTarget.Ready
+			readiness <- currentReadiness
 		}
 
 		time.Sleep(time.Duration(check_period) * time.Second)
